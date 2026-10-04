@@ -246,6 +246,21 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+import hmac
+
+# Optional password gate: set APP_PASSWORD in .env or Streamlit secrets to enable it.
+_app_password = os.getenv("APP_PASSWORD")
+if _app_password and not st.session_state.get("authed"):
+    st.title("College Notes Study Assistant")
+    _pw = st.text_input("Password", type="password")
+    if _pw:
+        if hmac.compare_digest(_pw, _app_password):
+            st.session_state["authed"] = True
+            st.rerun()
+        else:
+            st.error("Incorrect password")
+    st.stop()
+
 from rag_engine import GroqRequestError, RAGEngine
 
 
@@ -255,6 +270,17 @@ def get_engine():
 
 
 engine = get_engine()
+
+
+@st.cache_resource(show_spinner="Indexing the notes in the data folder (first start only)...")
+def auto_build(_engine):
+    # Cloud disks are wiped on restart, so rebuild the index from the PDFs in data/.
+    if not _engine.has_documents() and _engine.list_pdfs():
+        _engine.ingest_documents()
+    return True
+
+
+auto_build(engine)
 stats = engine.get_stats()
 has_documents = engine.has_documents()
 has_api_key = bool(os.getenv("GROQ_API_KEY"))
